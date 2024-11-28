@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: connectivity-test
+spec:
+  template:
+    spec:
+      containers:
+      - name: connectivity-test
+        image: python:3.9-slim
+        command: ["python", "/app/test_connectivity.py"]
+        volumeMounts:
+        - name: test-script
+          mountPath: /app
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: minio-secret
+              key: access-key
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-secret
+              key: secret-key
+      volumes:
+      - name: test-script
+        configMap:
+          name: connectivity-test-script
+      restartPolicy: Never
+  backoffLimit: 1 

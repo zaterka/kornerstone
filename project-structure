@@ -1,0 +1,41 @@
+kornerstone/
+├── README.md
+├── deploy/
+│   ├── base/
+│   │   ├── argo/
+│   │   │   └── kustomization.yaml
+│   │   ├── minio/
+│   │   │   ├── deployment.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   ├── pvc.yaml
+│   │   │   └── service.yaml
+│   │   ├── mlflow/
+│   │   │   ├── deployment.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   └── service.yaml
+│   │   ├── postgres/
+│   │   │   ├── deployment.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   ├── pvc.yaml
+│   │   │   └── service.yaml
+│   │   ├── storage/
+│   │   │   ├── kustomization.yaml
+│   │   │   └── local-pv.yaml
+│   │   └── tests/
+│   │       ├── connectivity-test.yaml
+│   │       ├── kustomization.yaml
+│   │       └── test-script-configmap.yaml
+│   └── overlays/
+│       └── default/
+│           ├── kustomization.yaml
+│           └── secrets/
+│               ├── minio-secret.yaml
+│               └── postgres-secret.yaml
+├── kornerstone-deploy.yaml
+└── ml/
+    ├── serving/
+    │   └── Dockerfile
+    └── training/
+        ├── Dockerfile
+        ├── requirements.txt
+        └── train.py 

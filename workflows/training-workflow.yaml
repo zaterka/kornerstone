@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: ml-training-
+spec:
+  entrypoint: train-model
+  volumes:
+  - name: mlflow-config
+    configMap:
+      name: mlflow-config
+
+  templates:
+  - name: train-model
+    container:
+      image: ml-training:latest
+      env:
+      - name: MLFLOW_TRACKING_URI
+        valueFrom:
+          configMapKeyRef:
+            name: mlflow-config
+            key: tracking_uri
+      - name: MLFLOW_EXPERIMENT_NAME
+        value: "diabetes-prediction"
+      - name: MODEL_NAME
+        value: "diabetes-model"
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "1"
+        limits:
+          memory: "4Gi"
+          cpu: "2" 
