@@ -13,7 +13,8 @@ spec:
     spec:
       containers:
       - name: mlflow
-        image: mlflow-custom:latest
+        image: localhost:5001/mlflow-custom:latest
+        imagePullPolicy: Always
         args:
         - mlflow
         - server
