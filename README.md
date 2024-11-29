@@ -48,18 +48,28 @@ graph LR
 
 ## Quick Start
 
-1. Deploy all components:
+1. Install KServe CRDs and controller:
+```bash
+kubectl apply -k kornerstone/deploy/base/kserve/install
+```
+
+2. Wait for KServe controller to be ready:
+```bash
+kubectl wait --for=condition=ready pod -l control-plane=kserve-controller-manager -n kserve --timeout=300s
+```
+
+3. Deploy all components:
 ```bash
 kubectl apply -k kornerstone
 ```
 
-2. Apply feature definitions:
+4. Apply feature definitions:
 ```bash
 cd ml/feature_repo
 feast apply
 ```
 
-3. Run a training workflow:
+5. Run a training workflow:
 ```bash
 kubectl create -f workflows/training-workflow.yaml
 ```

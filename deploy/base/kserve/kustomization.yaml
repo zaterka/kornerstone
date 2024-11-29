@@ -3,4 +3,5 @@ kind: Kustomization
 
 resources:
 - service-account.yaml
-- inference-service.yaml 
+# Temporarily comment out until KServe is installed
+# - inference-service.yaml 
