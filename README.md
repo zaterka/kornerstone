@@ -1,4 +1,4 @@
-# Kubernetes Native ML Platform
+# Kornerstone
 
 This repository contains the implementation of a Kubernetes-native machine learning platform using:
 - Argo Workflows for ML pipeline orchestration
