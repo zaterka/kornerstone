@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-controller-configmap
+data:
+  config: |
+    containerRuntimeExecutor: docker
+    executor:
+      imagePullPolicy: Always
+    workflowDefaults:
+      spec:
+        serviceAccountName: default
+    artifactRepository:
+      s3:
+        bucket: mlflow
+        endpoint: minio:9000
+        insecure: true
+        accessKeySecret:
+          name: minio-secret
+          key: access-key
+        secretKeySecret:
+          name: minio-secret
+          key: secret-key 

@@ -4,6 +4,11 @@ kornerstone/
 │   ├── base/
 │   │   ├── argo/
 │   │   │   └── kustomization.yaml
+│   │   ├── feast/
+│   │   │   ├── configmap.yaml
+│   │   │   ├── deployment.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   └── service.yaml
 │   │   ├── minio/
 │   │   │   ├── deployment.yaml
 │   │   │   ├── kustomization.yaml
@@ -31,8 +36,11 @@ kornerstone/
 │           └── secrets/
 │               ├── minio-secret.yaml
 │               └── postgres-secret.yaml
-├── kornerstone-deploy.yaml
+├── kustomization.yaml
 └── ml/
+    ├── feature_repo/
+    │   └── feature_definitions/
+    │       └── features.py
     ├── serving/
     │   └── Dockerfile
     └── training/

@@ -2,5 +2,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- connectivity-test.yaml
-- test-script-configmap.yaml 
+- service-account.yaml
+- inference-service.yaml 
