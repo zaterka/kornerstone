@@ -3,4 +3,8 @@ kind: Kustomization
 
 resources:
 - workflow-controller.yaml
-- workflow-controller-configmap.yaml 
+- workflow-controller-configmap.yaml
+- argo-server.yaml
+- argo-server-service.yaml
+- rbac.yaml
+- priority-class.yaml 

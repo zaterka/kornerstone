@@ -5,14 +5,21 @@ metadata:
 data:
   feature_store.yaml: |
     project: kornerstone
-    registry: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/feast
-    provider: local
+    registry:
+      path: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/feast
+      registry_type: sql
+    offline_store:
+      type: remote
+      host: minio
+      port: 9000
     online_store:
       type: postgres
-      connection_string: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/feast
-    offline_store:
-      type: file
-      file_options:
-        s3_endpoint_url: http://minio:9000
-        s3_access_key_id: ${AWS_ACCESS_KEY_ID}
-        s3_secret_access_key: ${AWS_SECRET_ACCESS_KEY} 
+      host: postgres
+      port: 5432
+      database: feast
+      db_schema: public
+      user: ${POSTGRES_USER}
+      password: ${POSTGRES_PASSWORD}
+    entity_key_serialization_version: 2
+    auth:
+      type: no_auth

@@ -11,19 +11,40 @@ spec:
       labels:
         app: feast-feature-server
     spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15-alpine
+        command: ['sh', '-c', 
+          'until pg_isready -h postgres -p 5432 -U feast; do echo waiting for postgres; sleep 2; done;']
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
       containers:
       - name: feast-feature-server
         image: feastdev/feature-server:latest
+        command: ["feast", "serve"]
         ports:
         - containerPort: 6566
         volumeMounts:
         - name: feast-config
           mountPath: /etc/feast
+        - name: feature-store-config
+          mountPath: /feature_store.yaml
+          subPath: feature_store.yaml
         env:
-        - name: FEAST_REGISTRY_PATH
-          value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/feast"
-        - name: FEAST_S3_ENDPOINT_URL
-          value: "http://minio:9000"
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
@@ -34,17 +55,13 @@ spec:
             secretKeyRef:
               name: minio-secret
               key: secret-key
-        - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secret
-              key: username
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secret
-              key: password
       volumes:
       - name: feast-config
         configMap:
-          name: feast-config 
+          name: feast-config
+      - name: feature-store-config
+        configMap:
+          name: feast-config
+          items:
+          - key: feature_store.yaml
+            path: feature_store.yaml 

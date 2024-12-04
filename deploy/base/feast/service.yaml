@@ -3,8 +3,10 @@ kind: Service
 metadata:
   name: feast-feature-server
 spec:
+  type: LoadBalancer
   ports:
   - port: 6566
     targetPort: 6566
+    protocol: TCP
   selector:
     app: feast-feature-server 
