@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: ml-training-
+spec:
+  serviceAccountName: argo-workflow-controller
+  entrypoint: train-model
+  templates:
+  - name: train-model
+    container:
+      image: training:latest
+      env:
+      - name: MLFLOW_TRACKING_URI
+        valueFrom:
+          configMapKeyRef:
+            name: mlflow-config
+            key: tracking_uri 

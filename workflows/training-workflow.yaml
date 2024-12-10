@@ -3,6 +3,7 @@ kind: Workflow
 metadata:
   generateName: ml-training-
 spec:
+  serviceAccountName: argo-workflow-controller
   entrypoint: train-model
   volumes:
   - name: mlflow-config

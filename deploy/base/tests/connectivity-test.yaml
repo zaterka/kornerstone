@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
       - name: connectivity-test
-        image: python:3.9-slim
+        image: python:3.12-slim
         command: ["python", "/app/test_connectivity.py"]
         volumeMounts:
         - name: test-script
