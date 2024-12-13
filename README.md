@@ -1,5 +1,8 @@
 # Kornerstone
 
+![Kornerstone](docs/images/logo.png)
+
+
 This repository contains the implementation of a Kubernetes-native machine learning platform using:
 - Argo Workflows for ML pipeline orchestration
 - Feast for feature store and management
