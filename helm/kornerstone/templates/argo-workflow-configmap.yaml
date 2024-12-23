@@ -1,0 +1,26 @@
+{{- if .Values.argo.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-workflow-controller-configmap
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+data:
+  config: |
+    workflowDefaults:
+      spec:
+        serviceAccountName: {{ .Values.argo.workflow.serviceAccount.name }}
+    artifactRepository:
+      archiveLogs: true
+      s3:
+        bucket: {{ .Values.argo.artifactRepository.s3.bucket }}
+        endpoint: {{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }}
+        insecure: {{ .Values.argo.artifactRepository.s3.insecure }}
+        accessKeySecret:
+          name: {{ .Release.Name }}-minio
+          key: root-user
+        secretKeySecret:
+          name: {{ .Release.Name }}-minio
+          key: root-password
+    namespaceParallelism: 10
+{{- end }} 

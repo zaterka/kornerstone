@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-feast
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "kornerstone.selectorLabels" . | nindent 6 }}
+      app: feast
+  template:
+    metadata:
+      labels:
+        {{- include "kornerstone.selectorLabels" . | nindent 8 }}
+        app: feast
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15-alpine
+        command: ['sh', '-c', 'until pg_isready -h {{ .Release.Name }}-postgresql -p 5432; do echo waiting for postgres; sleep 2; done;']
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-postgresql
+              key: password
+      containers:
+      - name: feast
+        image: "{{ .Values.feast.image.repository }}:{{ .Values.feast.image.tag }}"
+        command: ["feast", "serve"]
+        ports:
+        - containerPort: {{ .Values.feast.service.port }}
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-postgresql
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-postgresql
+              key: password
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-minio
+              key: root-user
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-minio
+              key: root-password
+        volumeMounts:
+        - name: feast-config
+          mountPath: /etc/feast/feature_store.yaml
+          subPath: feature_store.yaml
+      volumes:
+      - name: feast-config
+        configMap:
+          name: {{ .Release.Name }}-feast-config 

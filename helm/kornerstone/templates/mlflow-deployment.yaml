@@ -1,0 +1,34 @@
+mlflow:
+  enabled: true
+  tracking:
+    enabled: true
+    host: "0.0.0.0"
+    port: 5000
+  
+  postgresql:
+    enabled: false # We'll use our existing PostgreSQL
+    external:
+      host: '{{ .Release.Name }}-postgresql'
+      port: 5432
+      database: mlflow
+      username: feast
+      password: feast123
+
+  minio:
+    enabled: false # We'll use our existing MinIO
+    external:
+      host: '{{ .Release.Name }}-minio'
+      port: 9000
+      accessKey:
+        secretName: '{{ .Release.Name }}-minio'
+        secretKey: root-user
+      secretKey:
+        secretName: '{{ .Release.Name }}-minio'
+        secretKey: root-password
+
+  metrics:
+    enabled: true # Enable Prometheus metrics
+
+  extraEnvVars:
+    - name: MLFLOW_S3_ENDPOINT_URL
+      value: "http://{{ .Release.Name }}-minio:9000" 

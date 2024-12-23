@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-mlflow
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.mlflow.service.type }}
+  ports:
+    - port: {{ .Values.mlflow.service.port }}
+      targetPort: {{ .Values.mlflow.service.port }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "kornerstone.selectorLabels" . | nindent 4 }}
+    app: mlflow 
