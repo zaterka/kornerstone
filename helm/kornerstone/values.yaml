@@ -1,10 +1,13 @@
 # Global settings
 global:
   namespace: kornerstone-ml
-  storageClass: manual
+  storageClass: standard
   image:
     registry: ""
     pullPolicy: IfNotPresent
+  postgresql:
+    auth:
+      database: feast  # Set the primary database
 
 # PostgreSQL configuration
 postgresql:
@@ -12,39 +15,50 @@ postgresql:
   auth:
     username: feast
     password: feast123
-    database: feast
+    database: feast  # Primary database
     databases: 
       - mlflow
       - feast
+    existingSecret: ""
   primary:
     persistence:
       size: 10Gi
-      storageClass: manual
+      storageClass: standard
   metrics:
     enabled: true
     serviceMonitor:
       enabled: true
 
-# MLflow configuration
+# MLflow configuration (custom implementation)
 mlflow:
   enabled: true
-  image:
-    repository: mlflow-custom
-    tag: latest
-    pullPolicy: Always
   service:
     type: ClusterIP
     port: 5000
-  persistence:
+  tracking:
     enabled: true
-    size: 10Gi
-  config:
-    tracking_uri: http://mlflow-server:5000
-    artifact_root: s3://mlflow/artifacts
-  metrics:
-    enabled: true
-    serviceMonitor:
-      enabled: true
+    host: "0.0.0.0"
+    port: 5000
+  
+  extraEnvVars:
+    - name: MLFLOW_S3_ENDPOINT_URL
+      value: "http://{{ .Release.Name }}-minio:9000"
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: "{{ .Release.Name }}-minio"
+          key: root-user
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: "{{ .Release.Name }}-minio"
+          key: root-password
+    - name: MLFLOW_TRACKING_URI
+      value: "http://{{ .Release.Name }}-mlflow:5000"
+    - name: MLFLOW_S3_IGNORE_TLS
+      value: "true"
+    - name: MLFLOW_ARTIFACTS_DESTINATION
+      value: "s3://mlflow/artifacts"
 
 # MinIO configuration
 minio:
@@ -52,13 +66,16 @@ minio:
   auth:
     rootUser: minio
     rootPassword: minio123
+    existingSecret: ""
   persistence:
     size: 10Gi
+    storageClass: standard
   service:
+    type: ClusterIP
     ports:
       api: 9000
       console: 9001
-  defaultBuckets: "mlflow"
+  defaultBuckets: "mlflow,feast"
   metrics:
     serviceMonitor:
       enabled: true
@@ -68,29 +85,27 @@ feast:
   enabled: true
   image:
     repository: feastdev/feature-server
-    tag: latest
+    tag: "0.34.1"
   service:
-    type: LoadBalancer
+    type: ClusterIP
     port: 6566
   config:
     project: kornerstone
-    registry:
-      path: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/feast
-  extraEnvVars:
-    - name: FEAST_USAGE_STATISTICS
-      value: "true"
   ports:
     - name: http
       containerPort: 6566
     - name: metrics
       containerPort: 8080
+  extraEnvVars:
+    - name: FEAST_USAGE_STATISTICS
+      value: "false"
 
 # Argo Workflows configuration
 argo:
   enabled: true
   server:
     service:
-      type: LoadBalancer
+      type: ClusterIP
   workflow:
     serviceAccount:
       create: true
@@ -98,14 +113,28 @@ argo:
   artifactRepository:
     s3:
       bucket: mlflow
-      endpoint: minio:9000
+      endpoint: "{{ .Release.Name }}-minio.{{ .Release.Namespace }}.svc.cluster.local:9000"
       insecure: true
       accessKeySecret:
-        name: minio-secret
-        key: access-key
+        name: "{{ .Release.Name }}-minio"
+        key: root-user
       secretKeySecret:
-        name: minio-secret
-        key: secret-key
+        name: "{{ .Release.Name }}-minio"
+        key: root-password
+  # CRD configuration
+  crds:
+    install: true
+    keep: false
+  createAggregateRoles: true
+  controller:
+    workflowNamespaces:
+      - kornerstone-ml
+  # Add proper ownership labels
+  fullnameOverride: "kornerstone-argo"
+  commonLabels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: kornerstone
+    app.kubernetes.io/part-of: kornerstone
 
 # KServe configuration
 kserve:
@@ -120,8 +149,9 @@ tests:
 
 # Monitoring configuration
 monitoring:
-  enabled: true
+  enabled: false
 
+# Prometheus configuration
 kube-prometheus-stack:
   prometheus:
     enabled: true

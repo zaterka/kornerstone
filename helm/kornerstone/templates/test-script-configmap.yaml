@@ -36,7 +36,7 @@ data:
     def test_mlflow():
         print("\nTesting MLflow connection...")
         try:
-            response = requests.get("http://{{ .Release.Name }}-mlflow:{{ .Values.mlflow.service.port }}")
+            response = requests.get("http://{{ .Release.Name }}-mlflow:5000")
             if response.status_code == 200:
                 print("✅ Successfully connected to MLflow")
                 return True

@@ -1,0 +1,81 @@
+{{- if .Values.kserve.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-kserve-config
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+data:
+  storageConfig: |
+    {
+      "storageUri": "s3://mlflow/models",
+      "s3": {
+        "endpoint": "{{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }}",
+        "insecure": true,
+        "s3ForcePathStyle": true
+      }
+    }
+  credentials: |
+    {
+      "s3": {
+        "accessKeyID": "{{ .Values.minio.auth.rootUser }}",
+        "secretAccessKey": "{{ .Values.minio.auth.rootPassword }}"
+      }
+    }
+  modelConfigs: |
+    {
+      {{- if .Values.mlflow.enabled }}
+      "mlflow": {
+        "tracking": {
+          "uri": "http://{{ .Release.Name }}-mlflow:{{ .Values.mlflow.service.port | default 5000 }}"
+        }
+      }{{- if .Values.feast.enabled }},{{- end }}
+      {{- end }}
+      {{- if .Values.feast.enabled }}
+      "feast": {
+        "feature_store": "http://{{ .Release.Name }}-feast:{{ .Values.feast.service.port }}"
+      }
+      {{- end }}
+    }
+  servingRuntime: |
+    {
+      "container": {
+        "env": [
+          {{- if .Values.mlflow.enabled }}
+          {
+            "name": "MLFLOW_TRACKING_URI",
+            "value": "http://{{ .Release.Name }}-mlflow:{{ .Values.mlflow.service.port | default 5000 }}"
+          },
+          {{- end }}
+          {{- if .Values.feast.enabled }}
+          {
+            "name": "FEAST_FEATURE_STORE",
+            "value": "http://{{ .Release.Name }}-feast:{{ .Values.feast.service.port }}"
+          },
+          {{- end }}
+          {
+            "name": "S3_ENDPOINT",
+            "value": "http://{{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }}"
+          },
+          {
+            "name": "AWS_ACCESS_KEY_ID",
+            "valueFrom": {
+              "secretKeyRef": {
+                "name": "{{ .Release.Name }}-minio",
+                "key": "root-user"
+              }
+            }
+          },
+          {
+            "name": "AWS_SECRET_ACCESS_KEY",
+            "valueFrom": {
+              "secretKeyRef": {
+                "name": "{{ .Release.Name }}-minio",
+                "key": "root-password"
+              }
+            }
+          }
+        ]
+      }
+    }
+{{- end }} 

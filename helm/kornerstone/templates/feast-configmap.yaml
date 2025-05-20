@@ -1,3 +1,4 @@
+{{- if .Values.feast.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,9 +12,8 @@ data:
       path: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@{{ .Release.Name }}-postgresql:5432/feast
       registry_type: sql
     offline_store:
-      type: remote
-      host: {{ .Release.Name }}-minio
-      port: {{ .Values.minio.service.ports.api }}
+      type: file
+    provider: local
     online_store:
       type: postgres
       host: {{ .Release.Name }}-postgresql
@@ -23,5 +23,15 @@ data:
       user: ${POSTGRES_USER}
       password: ${POSTGRES_PASSWORD}
     entity_key_serialization_version: 2
-    auth:
-      type: no_auth 
+    feature_server:
+      enabled: true
+      host: 0.0.0.0
+      port: {{ .Values.feast.service.port }}
+    {{- if .Values.mlflow.enabled }}
+    mlflow:
+      tracking_uri: http://{{ .Release.Name }}-mlflow:{{ .Values.mlflow.service.port | default 5000 }}
+      artifact_location: s3://mlflow/artifacts
+    {{- end }}
+    s3_endpoint_url: http://{{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }}
+    s3_bucket: feast
+{{- end }} 

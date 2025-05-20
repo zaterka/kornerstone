@@ -1,0 +1,124 @@
+{{- if and .Values.argo.enabled .Values.minio.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-pre-argo-setup
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "5"  # Run after the service account creation but before Argo
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  backoffLimit: 12  # Retry limit
+  template:
+    metadata:
+      labels:
+        {{- include "kornerstone.labels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: wait-for-minio
+        image: bitnami/kubectl:latest
+        command:
+        - "/bin/bash"
+        - "-ec"
+        - |
+          echo "Waiting for MinIO deployment to be ready..."
+          
+          # First ensure the service account exists - or create it if it doesn't
+          if ! kubectl get serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }} &>/dev/null; then
+            echo "Creating {{ .Release.Name }}-minio service account..."
+            kubectl create serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }}
+            echo "Service account created manually!"
+          else
+            echo "MinIO service account already exists!"
+          fi
+          
+          # Ping the API server to ensure the service account is propagated
+          for i in {1..30}; do
+            if kubectl get serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }} -o yaml &>/dev/null; then
+              echo "ServiceAccount verified in API server!"
+              break
+            fi
+            echo "Waiting for service account to propagate... ($i/30)"
+            sleep 2
+          done
+          
+          # Wait for MinIO pods to be ready
+          for i in {1..60}; do
+            if kubectl get pods -l app.kubernetes.io/name=minio,app.kubernetes.io/instance={{ .Release.Name }} -n {{ .Release.Namespace }} 2>/dev/null | grep -q "Running"; then
+              echo "MinIO pods are running!"
+              break
+            fi
+            
+            if [ $i -eq 60 ]; then
+              echo "WARNING: Timed out waiting for MinIO pods - continuing anyway as service account exists"
+            else
+              echo "Waiting for MinIO pods to be ready... ($i/60)"
+              sleep 5
+            fi
+          done
+          
+          # Create a test minio secret if it doesn't exist
+          if ! kubectl get secret {{ .Release.Name }}-minio -n {{ .Release.Namespace }} &>/dev/null; then
+            echo "Creating minimal {{ .Release.Name }}-minio secret..."
+            kubectl create secret generic {{ .Release.Name }}-minio \
+              --from-literal=root-user=minio \
+              --from-literal=root-password=minio123 \
+              -n {{ .Release.Namespace }}
+            echo "Secret created manually!"
+          else
+            echo "MinIO secret already exists!"
+          fi
+          
+          echo "All MinIO prerequisites are ready!"
+          exit 0
+      restartPolicy: OnFailure
+      serviceAccountName: {{ .Release.Name }}-argo-hook-sa
+---
+# Service account for the hook job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-argo-hook-sa
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-15"  # Create this before running the job
+---
+# RBAC to allow the job to check resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-argo-hook-role
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-15"
+rules:
+- apiGroups: [""]
+  resources: ["pods", "serviceaccounts", "secrets"]
+  verbs: ["get", "list", "watch", "create"]
+- apiGroups: ["apps"]
+  resources: ["statefulsets", "deployments"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-argo-hook-rolebinding
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-15"
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}-argo-hook-sa
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-argo-hook-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }} 

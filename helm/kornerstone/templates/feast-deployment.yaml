@@ -1,3 +1,4 @@
+{{- if .Values.feast.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,23 +15,25 @@ spec:
       labels:
         {{- include "kornerstone.selectorLabels" . | nindent 8 }}
         app: feast
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/feast-configmap.yaml") . | sha256sum }}
     spec:
       initContainers:
-      - name: wait-for-postgres
-        image: postgres:15-alpine
-        command: ['sh', '-c', 'until pg_isready -h {{ .Release.Name }}-postgresql -p 5432; do echo waiting for postgres; sleep 2; done;']
-        env:
-        - name: PGPASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Release.Name }}-postgresql
-              key: password
+      {{- include "kornerstone.postgresql.initContainer" . | nindent 6 }}
+      {{- include "kornerstone.minio.initContainer" . | nindent 6 }}
+      {{- if .Values.mlflow.enabled }}
+      {{- include "kornerstone.mlflow.initContainer" . | nindent 6 }}
+      {{- end }}
       containers:
       - name: feast
-        image: "{{ .Values.feast.image.repository }}:{{ .Values.feast.image.tag }}"
+        image: "{{ .Values.feast.image.repository }}:{{ .Values.feast.image.tag | default "0.34.1" }}"
+        imagePullPolicy: IfNotPresent
         command: ["feast", "serve"]
         ports:
-        - containerPort: {{ .Values.feast.service.port }}
+        {{- range .Values.feast.ports }}
+        - name: {{ .name }}
+          containerPort: {{ .containerPort }}
+        {{- end }}
         env:
         - name: POSTGRES_USER
           valueFrom:
@@ -52,11 +55,40 @@ spec:
             secretKeyRef:
               name: {{ .Release.Name }}-minio
               key: root-password
+        - name: MINIO_PORT 
+          value: "{{ .Values.minio.service.ports.api }}"
+        - name: S3_STORAGE_BUCKET 
+          value: "feast"
+        {{- if .Values.mlflow.enabled }}
+        - name: MLFLOW_TRACKING_URI
+          value: "http://{{ .Release.Name }}-mlflow:{{ .Values.mlflow.service.port | default 5000 }}"
+        {{- end }}
+        {{- if .Values.feast.extraEnvVars }}
+        {{- toYaml .Values.feast.extraEnvVars | nindent 8 }}
+        {{- end }}
         volumeMounts:
         - name: feast-config
           mountPath: /etc/feast/feature_store.yaml
           subPath: feature_store.yaml
+        livenessProbe:
+          tcpSocket:
+            port: {{ .Values.feast.service.port }}
+          initialDelaySeconds: 60
+          periodSeconds: 20
+        readinessProbe:
+          tcpSocket:
+            port: {{ .Values.feast.service.port }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 200m
+            memory: 512Mi
       volumes:
       - name: feast-config
         configMap:
-          name: {{ .Release.Name }}-feast-config 
+          name: {{ .Release.Name }}-feast-config
+{{- end }} 
