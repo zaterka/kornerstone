@@ -1,0 +1,307 @@
+# Global settings
+global:
+  namespace: kornerstone-ml
+  storageClass: standard
+  image:
+    registry: ""
+    pullPolicy: IfNotPresent
+  postgresql:
+    auth:
+      database: feast  # Set the primary database
+
+# PostgreSQL configuration
+postgresql:
+  enabled: true
+  auth:
+    username: feast
+    password: feast123
+    database: feast  # Primary database
+    databases: 
+      - mlflow
+      - feast
+    existingSecret: ""
+  primary:
+    persistence:
+      size: 10Gi
+      storageClass: standard
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# MLflow configuration (custom implementation)
+mlflow:
+  enabled: true
+  service:
+    type: ClusterIP
+    port: 5000
+  tracking:
+    enabled: true
+    host: "0.0.0.0"
+    port: 5000
+  
+  extraEnvVars:
+    - name: MLFLOW_S3_ENDPOINT_URL
+      value: "http://{{ .Release.Name }}-minio:9000"
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: "{{ .Release.Name }}-minio"
+          key: root-user
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: "{{ .Release.Name }}-minio"
+          key: root-password
+    - name: MLFLOW_TRACKING_URI
+      value: "http://{{ .Release.Name }}-mlflow:5000"
+    - name: MLFLOW_S3_IGNORE_TLS
+      value: "true"
+    - name: MLFLOW_ARTIFACTS_DESTINATION
+      value: "s3://mlflow/artifacts"
+
+# MinIO configuration
+minio:
+  enabled: true
+  auth:
+    rootUser: minio
+    rootPassword: minio123
+    existingSecret: ""
+  persistence:
+    size: 10Gi
+    storageClass: standard
+  service:
+    type: ClusterIP
+    ports:
+      api: 9000
+      console: 9001
+  defaultBuckets: "mlflow,feast"
+  metrics:
+    serviceMonitor:
+      enabled: true
+
+# Feast configuration
+feast:
+  enabled: true
+  image:
+    repository: feastdev/feature-server
+    tag: "0.34.1"
+  service:
+    type: ClusterIP
+    port: 6566
+  config:
+    project: kornerstone
+  ports:
+    - name: http
+      containerPort: 6566
+    - name: metrics
+      containerPort: 8080
+  extraEnvVars:
+    - name: FEAST_USAGE_STATISTICS
+      value: "false"
+
+# Argo Workflows configuration
+argo:
+  enabled: true
+  server:
+    service:
+      type: ClusterIP
+  workflow:
+    serviceAccount:
+      create: true
+      name: argo-workflow
+  artifactRepository:
+    s3:
+      bucket: mlflow
+      endpoint: "{{ .Release.Name }}-minio.{{ .Release.Namespace }}.svc.cluster.local:9000"
+      insecure: true
+      accessKeySecret:
+        name: "{{ .Release.Name }}-minio"
+        key: root-user
+      secretKeySecret:
+        name: "{{ .Release.Name }}-minio"
+        key: root-password
+  # CRD configuration
+  crds:
+    install: true
+    keep: false
+  createAggregateRoles: true
+  controller:
+    workflowNamespaces:
+      - kornerstone-ml
+  # Add proper ownership labels
+  fullnameOverride: "kornerstone-argo"
+  commonLabels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: kornerstone
+    app.kubernetes.io/part-of: kornerstone
+
+# KServe configuration
+kserve:
+  enabled: true
+  serviceAccount:
+    create: true
+    name: kserve-sa
+
+# Test configuration
+tests:
+  enabled: true
+
+# Monitoring configuration
+monitoring:
+  enabled: false
+
+# Prometheus configuration
+kube-prometheus-stack:
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+    prometheusSpec:
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+      
+  grafana:
+    enabled: true
+    adminPassword: "admin-password"  # Change this
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+    
+    dashboards:
+      default:
+        mlflow:
+          json: |
+            {
+              "annotations": {
+                "list": []
+              },
+              "editable": true,
+              "fiscalYearStartMonth": 0,
+              "graphTooltip": 0,
+              "links": [],
+              "liveNow": false,
+              "panels": [
+                {
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "fieldConfig": {
+                    "defaults": {
+                      "color": {
+                        "mode": "palette-classic"
+                      },
+                      "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                          "legend": false,
+                          "tooltip": false,
+                          "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                          "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "spanNulls": false,
+                        "stacking": {
+                          "group": "A",
+                          "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                          "mode": "off"
+                        }
+                      },
+                      "mappings": [],
+                      "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                          {
+                            "color": "green",
+                            "value": null
+                          }
+                        ]
+                      }
+                    },
+                    "overrides": []
+                  },
+                  "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 0
+                  },
+                  "id": 1,
+                  "options": {
+                    "legend": {
+                      "calcs": [],
+                      "displayMode": "list",
+                      "placement": "bottom",
+                      "showLegend": true
+                    },
+                    "tooltip": {
+                      "mode": "single",
+                      "sort": "none"
+                    }
+                  },
+                  "title": "MLflow Requests",
+                  "type": "timeseries"
+                }
+              ],
+              "refresh": "",
+              "schemaVersion": 38,
+              "style": "dark",
+              "tags": [],
+              "templating": {
+                "list": []
+              },
+              "time": {
+                "from": "now-6h",
+                "to": "now"
+              },
+              "timepicker": {},
+              "timezone": "",
+              "title": "MLflow Dashboard",
+              "version": 0,
+              "weekStart": ""
+            }
+
+# Enable ServiceMonitor for MLflow
+mlflow:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# Enable MinIO metrics
+minio:
+  metrics:
+    serviceMonitor:
+      enabled: true
+
+# Enable PostgreSQL metrics
+postgresql:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true

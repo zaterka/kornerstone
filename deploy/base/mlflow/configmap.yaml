@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: mlflow-config
-data:
-  tracking_uri: "http://mlflow-server:5000"
-  artifact_root: "s3://mlflow/artifacts" 

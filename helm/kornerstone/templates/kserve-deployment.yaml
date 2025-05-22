@@ -1,0 +1,49 @@
+{{- if .Values.kserve.enabled }}
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: {{ .Release.Name }}-kserve-example-{{ randAlphaNum 6 | lower }}
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    serving.kserve.io/deploymentMode: Serverless
+    serving.kserve.io/skip-webhook-validation: "true"
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  predictor:
+    serviceAccountName: {{ .Values.kserve.serviceAccount.name }}
+    minReplicas: 0
+    maxReplicas: 3
+    containers:
+    - name: kserve-container
+      image: pytorch/torchserve:0.8.0-cpu
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 512Mi
+      env:
+      - name: STORAGE_URI
+        value: "s3://mlflow/models"
+      - name: S3_ENDPOINT
+        value: "http://{{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }}"
+      - name: S3_USE_HTTPS
+        value: "0"
+      - name: S3_VERIFY_SSL
+        value: "0"
+      - name: S3_REGION
+        value: "us-east-1"
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Release.Name }}-minio
+            key: root-user
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Release.Name }}-minio
+            key: root-password
+{{- end }} 

@@ -1,0 +1,59 @@
+{{- if .Values.minio.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-minio-buckets
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "kornerstone.selectorLabels" . | nindent 8 }}
+        app: minio-buckets
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+      {{- include "kornerstone.minio.initContainer" . | nindent 6 }}
+      containers:
+      - name: minio-mc
+        image: minio/mc:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          # Configure MinIO client
+          mc alias set myminio http://{{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }} $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
+          
+          # Create required buckets if they don't exist
+          for BUCKET in mlflow feast; do
+            if ! mc ls myminio/$BUCKET > /dev/null 2>&1; then
+              echo "Creating bucket '$BUCKET'..."
+              mc mb myminio/$BUCKET
+            else
+              echo "Bucket '$BUCKET' already exists."
+            fi
+          done
+          
+          # Set proper policies
+          echo "Setting public read policy for buckets..."
+          mc policy set download myminio/mlflow
+          mc policy set download myminio/feast
+          
+          echo "MinIO bucket setup completed successfully."
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-minio
+              key: root-user
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-minio
+              key: root-password
+{{- end }} 

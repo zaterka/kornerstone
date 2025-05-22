@@ -1,3 +1,0 @@
-tracking_uri: http://mlflow-server:5000
-artifact_root: s3://mlflow/artifacts
-experiment_name: default 

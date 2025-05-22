@@ -1,0 +1,58 @@
+Thank you for installing {{ .Chart.Name }}.
+
+Your Kornerstone ML Platform has been deployed with the following components:
+
+{{- if .Values.postgresql.enabled }}
+- PostgreSQL for database storage
+{{- end }}
+
+{{- if .Values.minio.enabled }}
+- MinIO for object storage
+{{- end }}
+
+{{- if .Values.mlflow.enabled }}
+- MLflow for experiment tracking and model registry
+{{- end }}
+
+{{- if .Values.feast.enabled }}
+- Feast for feature management
+{{- end }}
+
+{{- if .Values.argo.enabled }}
+- Argo Workflows for ML pipeline orchestration
+{{- end }}
+
+{{- if .Values.kserve.enabled }}
+- KServe for model serving
+{{- end }}
+
+To access the services:
+
+1. Set up port forwarding for accessing the services:
+
+   # MLflow UI
+   kubectl port-forward svc/{{ .Release.Name }}-mlflow 5000:5000 -n {{ .Release.Namespace }}
+   
+   # MinIO Console
+   kubectl port-forward svc/{{ .Release.Name }}-minio 9001:9001 -n {{ .Release.Namespace }}
+   
+   # Feast UI (if using Feast UI)
+   kubectl port-forward svc/{{ .Release.Name }}-feast 6566:6566 -n {{ .Release.Namespace }}
+   
+   # Argo Workflows UI
+   kubectl port-forward svc/{{ .Release.Name }}-argo-workflows-server 2746:2746 -n {{ .Release.Namespace }}
+
+2. Access the services in your browser:
+   - MLflow UI: http://localhost:5000
+   - MinIO Console: http://localhost:9001 (Username: {{ .Values.minio.auth.rootUser }}, Password: {{ .Values.minio.auth.rootPassword }})
+   - Argo Workflows UI: http://localhost:2746
+
+3. To check the status of all components:
+   kubectl get all -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+4. To clean up the existing resources before reinstalling (if needed):
+   kubectl delete namespace {{ .Release.Namespace }}
+   kubectl create namespace {{ .Release.Namespace }}
+
+For more information and usage examples, refer to the documentation at 
+https://github.com/yourusername/kornerstone 

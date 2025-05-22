@@ -1,0 +1,82 @@
+{{- if .Values.mlflow.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-mlflow
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+    app: mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kornerstone.selectorLabels" . | nindent 6 }}
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        {{- include "kornerstone.selectorLabels" . | nindent 8 }}
+        app: mlflow
+    spec:
+      initContainers:
+      {{- include "kornerstone.postgresql.initContainer" . | nindent 6 }}
+      {{- include "kornerstone.minio.initContainer" . | nindent 6 }}
+      containers:
+      - name: mlflow
+        image: "ghcr.io/mlflow/mlflow:v2.10.0"
+        imagePullPolicy: IfNotPresent
+        command: ["mlflow", "server"]
+        args:
+          - "--host=0.0.0.0"
+          - "--port={{ .Values.mlflow.service.port }}"
+          - "--backend-store-uri=postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:5432/mlflow"
+          - "--default-artifact-root=s3://mlflow/artifacts"
+          - "--workers=4"
+        ports:
+        - name: http
+          containerPort: {{ .Values.mlflow.service.port }}
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-postgresql
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-postgresql
+              key: password
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-minio
+              key: root-user
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-minio
+              key: root-password
+        - name: MLFLOW_S3_ENDPOINT_URL
+          value: "http://{{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }}"
+        - name: MLFLOW_S3_IGNORE_TLS
+          value: "true"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: {{ .Values.mlflow.service.port }}
+          initialDelaySeconds: 60
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /
+            port: {{ .Values.mlflow.service.port }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 200m
+            memory: 512Mi
+{{- end }} 

@@ -1,0 +1,103 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-cleanup
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: hook-succeeded,before-hook-creation
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "kornerstone.selectorLabels" . | nindent 8 }}
+        app: cleanup
+    spec:
+      serviceAccountName: {{ .Release.Name }}-cleanup-sa
+      restartPolicy: OnFailure
+      containers:
+      - name: kubectl
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Starting cleanup process..."
+          
+          # Remove existing PVCs to avoid conflicts
+          for pvc in $(kubectl get pvc -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }} -o name 2>/dev/null); do
+            echo "Deleting PVC: $pvc"
+            kubectl delete $pvc -n {{ .Release.Namespace }} --wait=false
+          done
+
+          # Remove existing jobs to avoid conflicts
+          for job in $(kubectl get jobs -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }} -o name 2>/dev/null | grep -v {{ .Release.Name }}-cleanup); do
+            echo "Deleting Job: $job"
+            kubectl delete $job -n {{ .Release.Namespace }} --wait=false
+          done
+          
+          # Remove KServe resources if they exist
+          if command -v kubectl get crd | grep -q inferenceservices.serving.kserve.io; then
+            for svc in $(kubectl get inferenceservices -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }} -o name 2>/dev/null); do
+              echo "Deleting InferenceService: $svc"
+              kubectl delete $svc -n {{ .Release.Namespace }} --wait=false
+            done
+          fi
+          
+          echo "Cleanup process completed"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-cleanup-sa
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-15"
+    helm.sh/hook-delete-policy: hook-succeeded,before-hook-creation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-cleanup-role
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-15"
+    helm.sh/hook-delete-policy: hook-succeeded,before-hook-creation
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "configmaps", "secrets", "services", "persistentvolumeclaims"]
+  verbs: ["get", "list", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "replicasets"]
+  verbs: ["get", "list", "delete"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list", "delete"]
+- apiGroups: ["serving.kserve.io"]
+  resources: ["inferenceservices"]
+  verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-cleanup-rolebinding
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-15"
+    helm.sh/hook-delete-policy: hook-succeeded,before-hook-creation
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}-cleanup-sa
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-cleanup-role
+  apiGroup: rbac.authorization.k8s.io 

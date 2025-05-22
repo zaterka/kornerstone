@@ -1,0 +1,37 @@
+{{- if .Values.feast.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-feast-config
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+data:
+  feature_store.yaml: |
+    project: {{ .Values.feast.config.project }}
+    registry:
+      path: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@{{ .Release.Name }}-postgresql:5432/feast
+      registry_type: sql
+    offline_store:
+      type: file
+    provider: local
+    online_store:
+      type: postgres
+      host: {{ .Release.Name }}-postgresql
+      port: 5432
+      database: feast
+      db_schema: public
+      user: ${POSTGRES_USER}
+      password: ${POSTGRES_PASSWORD}
+    entity_key_serialization_version: 2
+    feature_server:
+      enabled: true
+      host: 0.0.0.0
+      port: {{ .Values.feast.service.port }}
+    {{- if .Values.mlflow.enabled }}
+    mlflow:
+      tracking_uri: http://{{ .Release.Name }}-mlflow:{{ .Values.mlflow.service.port | default 5000 }}
+      artifact_location: s3://mlflow/artifacts
+    {{- end }}
+    s3_endpoint_url: http://{{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }}
+    s3_bucket: feast
+{{- end }} 

@@ -1,0 +1,104 @@
+{{- if and .Values.argo.enabled .Values.minio.enabled -}}
+{{- /* This ensures that Argo workflows are only installed if MinIO is enabled */ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-workflow-controller-configmap
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workflow-controller
+    app.kubernetes.io/part-of: argo
+  annotations:
+    # This annotation ensures this config map is processed later in the install
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/resource-policy": "keep"
+data:
+  config: |
+    workflowDefaults:
+      spec:
+        serviceAccountName: {{ .Values.argo.workflow.serviceAccount.name }}
+    artifactRepository:
+      archiveLogs: true
+      s3:
+        bucket: {{ .Values.argo.artifactRepository.s3.bucket }}
+        endpoint: {{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }}
+        insecure: {{ .Values.argo.artifactRepository.s3.insecure }}
+        accessKeySecret:
+          name: {{ .Release.Name }}-minio
+          key: root-user
+        secretKeySecret:
+          name: {{ .Release.Name }}-minio
+          key: root-password
+    namespaceParallelism: 10
+{{- end }}
+
+{{- if and .Values.argo.enabled .Values.minio.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-argo-config
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+    app.kubernetes.io/component: argo-config
+    app.kubernetes.io/part-of: argo
+  annotations:
+    # Add dependency annotations
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/resource-policy": "keep"
+data:
+  config.yaml: |
+    # Argo Workflows Configuration
+    artifactRepository:
+      s3:
+        bucket: mlflow
+        endpoint: {{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }}
+        insecure: true
+        accessKeySecret:
+          name: {{ .Release.Name }}-minio
+          key: root-user
+        secretKeySecret:
+          name: {{ .Release.Name }}-minio
+          key: root-password
+    # Configure integration with MLflow and KServe
+    workflowDefaults:
+      spec:
+        serviceAccountName: argo-workflow
+        volumeClaimTemplates:
+        - metadata:
+            name: workdir
+          spec:
+            accessModes: [ "ReadWriteOnce" ]
+            storageClassName: {{ .Values.global.storageClass }}
+            resources:
+              requests:
+                storage: 1Gi
+        volumes:
+        - name: kserve-config
+          configMap:
+            name: {{ .Release.Name }}-kserve-config
+        - name: mlflow-config
+          configMap:
+            name: {{ .Release.Name }}-mlflow-config
+
+{{- if and .Values.mlflow.enabled .Values.minio.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-mlflow-config
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mlflow-config
+    app.kubernetes.io/part-of: mlflow
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+data:
+  MLFLOW_TRACKING_URI: http://{{ .Release.Name }}-mlflow:5000
+  MLFLOW_S3_ENDPOINT_URL: http://{{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }}
+  AWS_ACCESS_KEY_ID: {{ .Values.minio.auth.rootUser }}
+  AWS_SECRET_ACCESS_KEY: {{ .Values.minio.auth.rootPassword }}
+{{- end }}
+{{- end }} 

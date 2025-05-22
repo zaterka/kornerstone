@@ -1,0 +1,110 @@
+{{- if .Values.minio.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-minio-initializer
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"  # Run early but after service account creation
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  ttlSecondsAfterFinished: 300  # Clean up after 5 minutes
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        {{- include "kornerstone.labels" . | nindent 8 }}
+        app: minio-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: minio-setup
+        image: bitnami/kubectl:latest
+        command: 
+        - "/bin/bash"
+        - "-ec"
+        - |
+          echo "Starting MinIO pre-configuration job..."
+          
+          # Verify that the service account exists
+          if ! kubectl get serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }} &>/dev/null; then
+            echo "Creating {{ .Release.Name }}-minio service account..."
+            kubectl create serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }}
+            
+            # Verify it was created
+            for i in {1..30}; do
+              if kubectl get serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }} &>/dev/null; then
+                echo "Service account created and verified!"
+                break
+              fi
+              echo "Waiting for service account to be available... ($i/30)"
+              sleep 2
+            done
+          else
+            echo "Service account {{ .Release.Name }}-minio already exists!"
+          fi
+          
+          # Create the secret if it doesn't exist
+          if ! kubectl get secret {{ .Release.Name }}-minio -n {{ .Release.Namespace }} &>/dev/null; then
+            echo "Creating {{ .Release.Name }}-minio secret..."
+            kubectl create secret generic {{ .Release.Name }}-minio \
+              --from-literal=root-user="{{ .Values.minio.auth.rootUser }}" \
+              --from-literal=root-password="{{ .Values.minio.auth.rootPassword }}" \
+              -n {{ .Release.Namespace }}
+            
+            echo "Secret created!"
+          else
+            echo "Secret {{ .Release.Name }}-minio already exists!"
+          fi
+          
+          echo "MinIO prerequisites are now ready!"
+      serviceAccountName: {{ .Release.Name }}-minio-init-sa
+---
+# Service account for the initialization job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-minio-init-sa
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-10"
+---
+# RBAC for the initialization job
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-minio-init-role
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-10"
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "serviceaccounts", "secrets", "services"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-minio-init-rolebinding
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-10"
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}-minio-init-sa
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-minio-init-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end -}} 

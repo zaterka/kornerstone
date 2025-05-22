@@ -1,0 +1,47 @@
+{{- if .Values.tests.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-connectivity-test
+  labels:
+    {{- include "kornerstone.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  template:
+    spec:
+      containers:
+      - name: connectivity-test
+        image: python:3.12-slim
+        command: ["python", "/app/test_connectivity.py"]
+        volumeMounts:
+        - name: test-script
+          mountPath: /app
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-postgresql
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-postgresql
+              key: password
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-minio
+              key: root-user
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-minio
+              key: root-password
+      volumes:
+      - name: test-script
+        configMap:
+          name: {{ .Release.Name }}-connectivity-test-script
+      restartPolicy: Never
+  backoffLimit: 1
+{{- end }} 
