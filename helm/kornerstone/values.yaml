@@ -1,7 +1,7 @@
 # Global settings
 global:
   namespace: kornerstone-ml
-  storageClass: standard
+  storageClass: "hostpath"  # Use hostpath for local development
   image:
     registry: ""
     pullPolicy: IfNotPresent
@@ -23,11 +23,11 @@ postgresql:
   primary:
     persistence:
       size: 10Gi
-      storageClass: standard
+      storageClass: hostpath
   metrics:
-    enabled: true
+    enabled: false  # Disabled due to secret key conflicts
     serviceMonitor:
-      enabled: true
+      enabled: false
 
 # MLflow configuration (custom implementation)
 mlflow:
@@ -39,7 +39,6 @@ mlflow:
     enabled: true
     host: "0.0.0.0"
     port: 5000
-  
   extraEnvVars:
     - name: MLFLOW_S3_ENDPOINT_URL
       value: "http://{{ .Release.Name }}-minio:9000"
@@ -59,6 +58,10 @@ mlflow:
       value: "true"
     - name: MLFLOW_ARTIFACTS_DESTINATION
       value: "s3://mlflow/artifacts"
+  metrics:
+    enabled: false  # Disabled temporarily
+    serviceMonitor:
+      enabled: false
 
 # MinIO configuration
 minio:
@@ -69,20 +72,29 @@ minio:
     existingSecret: ""
   persistence:
     size: 10Gi
-    storageClass: standard
+    storageClass: hostpath
   service:
     type: ClusterIP
     ports:
       api: 9000
       console: 9001
   defaultBuckets: "mlflow,feast"
+  provisioning:
+    enabled: true
+    buckets:
+      - name: mlflow
+        policy: none
+        purge: false
+      - name: feast
+        policy: none
+        purge: false
   metrics:
     serviceMonitor:
-      enabled: true
+      enabled: false  # Disabled temporarily
 
 # Feast configuration
 feast:
-  enabled: true
+  enabled: true  # Re-enable Feast
   image:
     repository: feastdev/feature-server
     tag: "0.34.1"
@@ -102,43 +114,22 @@ feast:
 
 # Argo Workflows configuration
 argo:
-  enabled: true
+  enabled: true  # Re-enable Argo Workflows
   server:
     service:
       type: ClusterIP
+      port: 2746
   workflow:
     serviceAccount:
-      create: true
       name: argo-workflow
   artifactRepository:
     s3:
       bucket: mlflow
-      endpoint: "{{ .Release.Name }}-minio.{{ .Release.Namespace }}.svc.cluster.local:9000"
       insecure: true
-      accessKeySecret:
-        name: "{{ .Release.Name }}-minio"
-        key: root-user
-      secretKeySecret:
-        name: "{{ .Release.Name }}-minio"
-        key: root-password
-  # CRD configuration
-  crds:
-    install: true
-    keep: false
-  createAggregateRoles: true
-  controller:
-    workflowNamespaces:
-      - kornerstone-ml
-  # Add proper ownership labels
-  fullnameOverride: "kornerstone-argo"
-  commonLabels:
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/instance: kornerstone
-    app.kubernetes.io/part-of: kornerstone
 
 # KServe configuration
 kserve:
-  enabled: true
+  enabled: true  # Re-enable KServe
   serviceAccount:
     create: true
     name: kserve-sa
@@ -153,155 +144,10 @@ monitoring:
 
 # Prometheus configuration
 kube-prometheus-stack:
+  enabled: false  # Disabled until core components are stable
   prometheus:
-    enabled: true
+    enabled: false
     serviceMonitor:
-      enabled: true
-    prometheusSpec:
-      serviceMonitorSelectorNilUsesHelmValues: false
-      podMonitorSelectorNilUsesHelmValues: false
-      ruleSelectorNilUsesHelmValues: false
-      
+      enabled: false
   grafana:
-    enabled: true
-    adminPassword: "admin-password"  # Change this
-    dashboardProviders:
-      dashboardproviders.yaml:
-        apiVersion: 1
-        providers:
-        - name: 'default'
-          orgId: 1
-          folder: ''
-          type: file
-          disableDeletion: false
-          editable: true
-          options:
-            path: /var/lib/grafana/dashboards/default
-    
-    dashboards:
-      default:
-        mlflow:
-          json: |
-            {
-              "annotations": {
-                "list": []
-              },
-              "editable": true,
-              "fiscalYearStartMonth": 0,
-              "graphTooltip": 0,
-              "links": [],
-              "liveNow": false,
-              "panels": [
-                {
-                  "datasource": {
-                    "type": "prometheus",
-                    "uid": "prometheus"
-                  },
-                  "fieldConfig": {
-                    "defaults": {
-                      "color": {
-                        "mode": "palette-classic"
-                      },
-                      "custom": {
-                        "axisCenteredZero": false,
-                        "axisColorMode": "text",
-                        "axisLabel": "",
-                        "axisPlacement": "auto",
-                        "barAlignment": 0,
-                        "drawStyle": "line",
-                        "fillOpacity": 0,
-                        "gradientMode": "none",
-                        "hideFrom": {
-                          "legend": false,
-                          "tooltip": false,
-                          "viz": false
-                        },
-                        "lineInterpolation": "linear",
-                        "lineWidth": 1,
-                        "pointSize": 5,
-                        "scaleDistribution": {
-                          "type": "linear"
-                        },
-                        "showPoints": "auto",
-                        "spanNulls": false,
-                        "stacking": {
-                          "group": "A",
-                          "mode": "none"
-                        },
-                        "thresholdsStyle": {
-                          "mode": "off"
-                        }
-                      },
-                      "mappings": [],
-                      "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                          {
-                            "color": "green",
-                            "value": null
-                          }
-                        ]
-                      }
-                    },
-                    "overrides": []
-                  },
-                  "gridPos": {
-                    "h": 8,
-                    "w": 12,
-                    "x": 0,
-                    "y": 0
-                  },
-                  "id": 1,
-                  "options": {
-                    "legend": {
-                      "calcs": [],
-                      "displayMode": "list",
-                      "placement": "bottom",
-                      "showLegend": true
-                    },
-                    "tooltip": {
-                      "mode": "single",
-                      "sort": "none"
-                    }
-                  },
-                  "title": "MLflow Requests",
-                  "type": "timeseries"
-                }
-              ],
-              "refresh": "",
-              "schemaVersion": 38,
-              "style": "dark",
-              "tags": [],
-              "templating": {
-                "list": []
-              },
-              "time": {
-                "from": "now-6h",
-                "to": "now"
-              },
-              "timepicker": {},
-              "timezone": "",
-              "title": "MLflow Dashboard",
-              "version": 0,
-              "weekStart": ""
-            }
-
-# Enable ServiceMonitor for MLflow
-mlflow:
-  metrics:
-    enabled: true
-    serviceMonitor:
-      enabled: true
-
-# Enable MinIO metrics
-minio:
-  metrics:
-    serviceMonitor:
-      enabled: true
-
-# Enable PostgreSQL metrics
-postgresql:
-  metrics:
-    enabled: true
-    serviceMonitor:
-      enabled: true
+    enabled: false

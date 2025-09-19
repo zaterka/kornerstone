@@ -20,46 +20,12 @@ spec:
     spec:
       restartPolicy: OnFailure
       containers:
-      - name: minio-setup
-        image: bitnami/kubectl:latest
-        command: 
-        - "/bin/bash"
-        - "-ec"
+      - name: noop
+        image: alpine:3.20
+        command: ["/bin/sh","-c"]
+        args:
         - |
-          echo "Starting MinIO pre-configuration job..."
-          
-          # Verify that the service account exists
-          if ! kubectl get serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }} &>/dev/null; then
-            echo "Creating {{ .Release.Name }}-minio service account..."
-            kubectl create serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }}
-            
-            # Verify it was created
-            for i in {1..30}; do
-              if kubectl get serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }} &>/dev/null; then
-                echo "Service account created and verified!"
-                break
-              fi
-              echo "Waiting for service account to be available... ($i/30)"
-              sleep 2
-            done
-          else
-            echo "Service account {{ .Release.Name }}-minio already exists!"
-          fi
-          
-          # Create the secret if it doesn't exist
-          if ! kubectl get secret {{ .Release.Name }}-minio -n {{ .Release.Namespace }} &>/dev/null; then
-            echo "Creating {{ .Release.Name }}-minio secret..."
-            kubectl create secret generic {{ .Release.Name }}-minio \
-              --from-literal=root-user="{{ .Values.minio.auth.rootUser }}" \
-              --from-literal=root-password="{{ .Values.minio.auth.rootPassword }}" \
-              -n {{ .Release.Namespace }}
-            
-            echo "Secret created!"
-          else
-            echo "Secret {{ .Release.Name }}-minio already exists!"
-          fi
-          
-          echo "MinIO prerequisites are now ready!"
+          echo "MinIO init hook is now a no-op because Bitnami MinIO subchart manages SA/Secret."
       serviceAccountName: {{ .Release.Name }}-minio-init-sa
 ---
 # Service account for the initialization job

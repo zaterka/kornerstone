@@ -1,9 +1,11 @@
+{{- if .Values.feast.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ .Release.Name }}-feast
   labels:
     {{- include "kornerstone.labels" . | nindent 4 }}
+    app: feast
 spec:
   type: {{ .Values.feast.service.type }}
   ports:
@@ -13,4 +15,5 @@ spec:
       name: http
   selector:
     {{- include "kornerstone.selectorLabels" . | nindent 4 }}
-    app: feast 
+    app: feast
+{{- end }} 
