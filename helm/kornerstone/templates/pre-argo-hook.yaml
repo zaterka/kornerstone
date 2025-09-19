@@ -25,24 +25,8 @@ spec:
         - |
           echo "Waiting for MinIO deployment to be ready..."
           
-          # First ensure the service account exists - or create it if it doesn't
-          if ! kubectl get serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }} &>/dev/null; then
-            echo "Creating {{ .Release.Name }}-minio service account..."
-            kubectl create serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }}
-            echo "Service account created manually!"
-          else
-            echo "MinIO service account already exists!"
-          fi
-          
-          # Ping the API server to ensure the service account is propagated
-          for i in {1..30}; do
-            if kubectl get serviceaccount {{ .Release.Name }}-minio -n {{ .Release.Namespace }} -o yaml &>/dev/null; then
-              echo "ServiceAccount verified in API server!"
-              break
-            fi
-            echo "Waiting for service account to propagate... ($i/30)"
-            sleep 2
-          done
+          # Rely on Bitnami MinIO to manage its own ServiceAccount
+          echo "Skipping manual MinIO ServiceAccount creation (managed by subchart)"
           
           # Wait for MinIO pods to be ready
           for i in {1..60}; do
@@ -59,17 +43,7 @@ spec:
             fi
           done
           
-          # Create a test minio secret if it doesn't exist
-          if ! kubectl get secret {{ .Release.Name }}-minio -n {{ .Release.Namespace }} &>/dev/null; then
-            echo "Creating minimal {{ .Release.Name }}-minio secret..."
-            kubectl create secret generic {{ .Release.Name }}-minio \
-              --from-literal=root-user=minio \
-              --from-literal=root-password=minio123 \
-              -n {{ .Release.Namespace }}
-            echo "Secret created manually!"
-          else
-            echo "MinIO secret already exists!"
-          fi
+          echo "Skipping manual MinIO Secret creation (managed by subchart)"
           
           echo "All MinIO prerequisites are ready!"
           exit 0

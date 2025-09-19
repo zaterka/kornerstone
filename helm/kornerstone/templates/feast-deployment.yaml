@@ -5,7 +5,9 @@ metadata:
   name: {{ .Release.Name }}-feast
   labels:
     {{- include "kornerstone.labels" . | nindent 4 }}
+    app: feast
 spec:
+  replicas: 1
   selector:
     matchLabels:
       {{- include "kornerstone.selectorLabels" . | nindent 6 }}
@@ -21,14 +23,14 @@ spec:
       initContainers:
       {{- include "kornerstone.postgresql.initContainer" . | nindent 6 }}
       {{- include "kornerstone.minio.initContainer" . | nindent 6 }}
-      {{- if .Values.mlflow.enabled }}
-      {{- include "kornerstone.mlflow.initContainer" . | nindent 6 }}
-      {{- end }}
       containers:
       - name: feast
         image: "{{ .Values.feast.image.repository }}:{{ .Values.feast.image.tag | default "0.34.1" }}"
         imagePullPolicy: IfNotPresent
         command: ["feast", "serve"]
+        args:
+          - "--host=0.0.0.0"
+          - "--port={{ .Values.feast.service.port }}"
         ports:
         {{- range .Values.feast.ports }}
         - name: {{ .name }}
@@ -36,15 +38,18 @@ spec:
         {{- end }}
         env:
         - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Release.Name }}-postgresql
-              key: username
+          value: "{{ .Values.postgresql.auth.username }}"
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
               name: {{ .Release.Name }}-postgresql
               key: password
+        - name: POSTGRES_HOST
+          value: "{{ .Release.Name }}-postgresql"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DATABASE
+          value: "feast"
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
@@ -55,9 +60,9 @@ spec:
             secretKeyRef:
               name: {{ .Release.Name }}-minio
               key: root-password
-        - name: MINIO_PORT 
-          value: "{{ .Values.minio.service.ports.api }}"
-        - name: S3_STORAGE_BUCKET 
+        - name: S3_ENDPOINT_URL
+          value: "http://{{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }}"
+        - name: S3_BUCKET
           value: "feast"
         {{- if .Values.mlflow.enabled }}
         - name: MLFLOW_TRACKING_URI
@@ -68,18 +73,24 @@ spec:
         {{- end }}
         volumeMounts:
         - name: feast-config
-          mountPath: /etc/feast/feature_store.yaml
+          mountPath: /feature_store.yaml
           subPath: feature_store.yaml
+        - name: tmp-volume
+          mountPath: /tmp
         livenessProbe:
           tcpSocket:
             port: {{ .Values.feast.service.port }}
-          initialDelaySeconds: 60
-          periodSeconds: 20
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
         readinessProbe:
           tcpSocket:
             port: {{ .Values.feast.service.port }}
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         resources:
           limits:
             cpu: 1000m
@@ -91,4 +102,6 @@ spec:
       - name: feast-config
         configMap:
           name: {{ .Release.Name }}-feast-config
+      - name: tmp-volume
+        emptyDir: {}
 {{- end }} 

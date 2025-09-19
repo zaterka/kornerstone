@@ -1,8 +1,13 @@
 {{- if .Values.kserve.enabled }}
+{{/*
+# KServe InferenceService Example
+# This is commented out as it requires KServe to be installed in the cluster
+# Uncomment and customize when you have KServe installed and want to deploy models
+
 apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
 metadata:
-  name: {{ .Release.Name }}-kserve-example-{{ randAlphaNum 6 | lower }}
+  name: {{ .Release.Name }}-kserve-example
   labels:
     {{- include "kornerstone.labels" . | nindent 4 }}
   annotations:
@@ -46,4 +51,5 @@ spec:
           secretKeyRef:
             name: {{ .Release.Name }}-minio
             key: root-password
+*/}}
 {{- end }} 

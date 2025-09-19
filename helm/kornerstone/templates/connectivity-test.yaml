@@ -19,10 +19,7 @@ spec:
           mountPath: /app
         env:
         - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Release.Name }}-postgresql
-              key: username
+          value: "{{ .Values.postgresql.auth.username }}"
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
